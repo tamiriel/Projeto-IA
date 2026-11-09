@@ -1,102 +1,54 @@
-from flask import Flask, request, jsonify
+"""Experimental Flask endpoint for LLM-assisted financial scenario exploration.
+
+This project does not implement or validate tax calculations independently.
+Do not use generated figures as professional tax advice.
+"""
+import json
+import os
+
+from flask import Flask, jsonify, request
 from google import genai
-import os, json
 
 app = Flask(__name__)
 
-# 🔑 Configure sua API Key do Gemini
-os.environ["GOOGLE_API_KEY"] = "CHAVE"
-
-# Inicializa o cliente
-client = genai.Client()
-
-# Prompt fixo para garantir saída sempre no mesmo modelo
 PROMPT_PADRAO = """
-Você é um assistente contábil inteligente que analisa dados financeiros de empresas.
-
-Regras obrigatórias:
-- Responda SEMPRE exatamente no mesmo formato JSON abaixo.
-- Não adicione texto fora do JSON.
-- Preencha os valores com base nos dados recebidos.
-- Se algum valor não puder ser calculado, use "0.00" ou deixe como string vazia.
-- O campo "recomendado" deve ser o regime com menor imposto total anual.
-
-MODELO FIXO DE RESPOSTA:
-{
-  "companyId": 123,
-  "year": 2026,
-  "metodo": "ia:v1:regras2025+forecastARIMA",
-  "faturamentoTotalAnual": "720000.00",
-  "baseMensal": [
-    {
-      "ano": 2026,
-      "mes": 1,
-      "receitaBruta": "52000.00",
-      "folhaSalarios": "11000.00"
-    }
-  ],
-  "regimes": [
-    {
-      "nome": "Simples Nacional - Anexo III",
-      "impostoTotalAnual": "84567.22",
-      "impostoTotalMensal": [
-        { "mes": 1, "valor": "7000.00" }
-      ],
-      "aliquotaEfetiva": "0.1176",
-      "detalhesTributos": {
-        "IRPJ": "0.00",
-        "CSLL": "0.00",
-        "PIS": "3500.00",
-        "COFINS": "16100.00",
-        "ISS": "22000.00",
-        "CPP": "21967.22"
-      },
-      "observacoes": "Fator R > 28%; enquadrado no Anexo III."
-    },
-    {
-      "nome": "Lucro Presumido",
-      "impostoTotalAnual": "93210.80"
-    },
-    {
-      "nome": "Lucro Real",
-      "impostoTotalAnual": "96000.00"
-    }
-  ],
-  "recomendado": "Simples Nacional - Anexo III"
-}
-
-Agora gere a resposta conforme esse modelo, usando os dados que vou enviar.
+Você recebe dados financeiros em JSON para uma demonstração experimental.
+Responda apenas com JSON válido, sem blocos Markdown.
+Não afirme ter executado ARIMA ou cálculos fiscais determinísticos.
+Não invente precisão ou certeza: sinalize hipóteses e dados ausentes.
+Produza uma análise exploratória, não aconselhamento tributário.
+Inclua os campos: companyId, year, metodo, observacoes, regimes e recomendado.
+Use metodo = "llm:gemini-prototipo". Caso não possa comparar os regimes
+com segurança, use recomendado = null e explique em observacoes.
 """
 
-@app.route("/chat", methods=["POST"])
+@app.post("/chat")
 def chat():
+    dados = request.get_json(silent=True)
+    if not isinstance(dados, dict) or not dados:
+        return jsonify({"error": "Envie um objeto JSON não vazio."}), 400
+
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        return jsonify({"error": "Servidor sem GOOGLE_API_KEY configurada."}), 503
+
     try:
-        dados = request.get_json()
-        if not dados:
-            return jsonify({"error": "Envie um JSON válido no corpo da requisição."}), 400
-
-        # Converte a entrada em string para enviar ao modelo
-        entrada_json = json.dumps(dados, ensure_ascii=False, indent=2)
-
-        # Chamada ao Gemini
+        client = genai.Client(api_key=api_key)
         resposta = client.models.generate_content(
             model="gemini-2.5-pro",
-            contents=f"{PROMPT_PADRAO}\n\nEntrada:\n{entrada_json}"
+            contents=f"{PROMPT_PADRAO}\n\nEntrada:\n{json.dumps(dados, ensure_ascii=False)}",
         )
-
-        texto = resposta.text.strip()
-
-        # Tenta converter para JSON
-        try:
-            saida = json.loads(texto)
-            return jsonify(saida)
-        except:
-            # Se o modelo não retornar JSON válido
-            return jsonify({"raw_output": texto})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        texto = (resposta.text or "").strip()
+        resultado = json.loads(texto)
+        if not isinstance(resultado, dict):
+            return jsonify({"error": "O modelo não retornou um objeto JSON."}), 502
+        return jsonify(resultado)
+    except json.JSONDecodeError:
+        return jsonify({"error": "O modelo não retornou JSON válido."}), 502
+    except Exception:
+        app.logger.exception("Falha ao processar solicitação de IA")
+        return jsonify({"error": "Falha ao processar solicitação."}), 502
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)

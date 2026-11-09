@@ -1,38 +1,117 @@
-# Projeto-IA 
-<img width="886" height="493" alt="image" src="https://github.com/user-attachments/assets/68e0a99a-582d-4865-a5b5-280b2e846a81" />
+# AI-Assisted Financial Scenarios API
 
-Entrada: {
-  "companyId": 123,
-  "year": 2026,
-  "useAiForecast": true,
-  "historicalMonthly": [
-    {
-      "ano": 2024,
-      "mes": 12,
-      "receitaBruta": "48000.00",
-      "folhaSalarios": "10000.00",
-      "lucroLiquidoContabil": "3000.00",
-      "insumosCreditoPisCofins": "2500.00",
-      "retencaoIRPJ": "0.00",
-      "retencaoCSLL": "0.00"
-    }
-  ],
-  "targetYearMonthly": [
-    {
-      "ano": 2026,
-      "mes": 1,
-      "receitaBruta": "52000.00",
-      "folhaSalarios": "11000.00",
-      "lucroLiquidoContabil": "3100.00",
-      "insumosCreditoPisCofins": "2700.00",
-      "retencaoIRPJ": "0.00",
-      "retencaoCSLL": "0.00"
-    }
-  ]
-}
+**Python · Flask · Gemini API · JSON**
 
+An **experimental academic prototype** that accepts financial data via a Flask HTTP endpoint and asks a large language model (LLM) to return a structured, exploratory comparison of tax scenarios.
 
-Saída: 
-{
-    "raw_output": "```json\n{\n  \"companyId\": 123,\n  \"year\": 2026,\n  \"metodo\": \"ia:v1:regras2025+forecastARIMA\",\n  \"faturamentoTotalAnual\": \"624000.00\",\n  \"baseMensal\": [\n    {\n      \"ano\": 2026,\n      \"mes\": 1,\n      \"receitaBruta\": \"52000.00\",\n      \"folhaSalarios\": \"11000.00\"\n    }\n  ],\n  \"regimes\": [\n    {\n      \"nome\": \"Simples Nacional - Anexo V\",\n      \"impostoTotalAnual\": \"82867.20\",\n      \"impostoTotalMensal\": [\n        {\n          \"mes\": 1,\n          \"valor\": \"6905.60\"\n        }\n      ],\n      \"aliquotaEfetiva\": \"0.1328\",\n      \"detalhesTributos\": {\n        \"IRPJ\": \"20716.80\",\n        \"CSLL\": \"12430.08\",\n        \"PIS\": \"2303.71\",\n        \"COFINS\": \"10623.57\",\n        \"ISS\": \"12885.85\",\n        \"CPP\": \"23908.20\"\n      },\n      \"observacoes\": \"Fator R < 28%; enquadrado no Anexo V.\"\n    },\n    {\n      \"nome\": \"Lucro Presumido\",\n      \"impostoTotalAnual\": \"101899.20\"\n    },\n    {\n      \"nome\": \"Lucro Real\",\n      \"impostoTotalAnual\": \"94851.00\"\n    }\n  ],\n  \"recomendado\": \"Simples Nacional - Anexo V\"\n}\n```"
-}
+> **Status: prototype.** This repository does **not** implement a validated tax engine, deterministic fiscal calculations or a tested ARIMA forecasting model. Generated numbers may be inaccurate and must not be used for accounting, fiscal decisions or professional advice.
+
+## What this repository demonstrates
+
+- Implementing a JSON HTTP endpoint with Flask
+- Calling an external generative AI API
+- Parsing model output as JSON and handling invalid responses
+- Handling API credentials through environment variables
+- Documenting an experimental integration and its limitations
+
+## Architecture
+
+```text
+Client (JSON)
+    |
+    v
+POST /chat  --> Flask input validation
+    |
+    v
+Gemini model (external API)
+    |
+    v
+Parse model output as JSON
+    |
+    v
+JSON response or HTTP error
+```
+
+The model generates an analysis; the application **does not independently verify** the mathematical or legal correctness of that analysis.
+
+## Requirements
+
+- Python 3.10+
+- A Google Gemini API key
+- Internet access for calls to the model
+
+## Run locally
+
+```bash
+git clone https://github.com/tamiriel/Projeto-IA.git
+cd Projeto-IA
+python -m venv .venv
+```
+
+Activate the environment:
+
+- Windows PowerShell: `.venv\Scripts\Activate.ps1`
+- macOS/Linux: `source .venv/bin/activate`
+
+Then:
+
+```bash
+pip install -r requirements.txt
+```
+
+Set `GOOGLE_API_KEY` in the shell (do not commit the actual value). For example, in PowerShell:
+
+```powershell
+$env:GOOGLE_API_KEY="YOUR_API_KEY"
+python app.py
+```
+
+On macOS/Linux:
+
+```bash
+export GOOGLE_API_KEY="YOUR_API_KEY"
+python app.py
+```
+
+By default, the local API listens at `http://127.0.0.1:5000`. The `.env.example` file documents the expected variable; the application reads it from the process environment and does not automatically load `.env`.
+
+## Example request
+
+```bash
+curl -X POST http://127.0.0.1:5000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"companyId":123,"year":2026,"historicalMonthly":[{"ano":2025,"mes":12,"receitaBruta":"48000.00"}]}'
+```
+
+**Response:** a JSON object produced by the model, potentially containing `companyId`, `year`, `metodo`, `observacoes`, `regimes` and `recomendado`. Exact contents vary between calls; no fixed output or fiscal accuracy is guaranteed.
+
+### HTTP errors
+
+| Status | Meaning |
+| --- | --- |
+| 400 | Missing, malformed or non-object JSON input |
+| 503 | No API key configured on the server |
+| 502 | Invalid model response or external model request failure |
+
+## Known limitations
+
+- The integration uses a prompt rather than a verified, versioned calculation engine.
+- LLM outputs can be inconsistent, hallucinated or legally out of date.
+- There is currently no formal input schema or automated integration-test suite.
+- There is no rate limiting, authentication, audit trail or production deployment setup.
+- The included CI workflow checks Python syntax only; it is **not** a test suite.
+- Sending company data to an external model requires data-governance and privacy review.
+
+## Next engineering steps
+
+- [ ] Add a request schema with field-level validation
+- [ ] Add unit tests with the Gemini client mocked
+- [ ] Separate Flask routing from model integration
+- [ ] Validate model output against a defined response schema
+- [ ] Establish deterministic, independently tested fiscal rules before presenting comparisons as reliable
+- [ ] Add request limits and production-ready error handling
+- [ ] Document data handling and privacy risks
+
+## Author
+
+**Tainara da Rosa** · Computer Engineering · [GitHub](https://github.com/tamiriel)
